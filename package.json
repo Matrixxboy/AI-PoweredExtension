@@ -12,13 +12,17 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "ai-powered.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
+  "commands": [
+    {
+      "command": "extension.debugCode",
+      "title": "AI Debug: Fix Code"
+    },
+    {
+      "command": "extension.customDebugPrompt",
+      "title": "AI Debug: Custom Prompt"
+    }
+  ]
+},
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",

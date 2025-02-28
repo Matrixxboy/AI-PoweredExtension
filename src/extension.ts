@@ -1,26 +1,120 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import axios from 'axios';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+const LOCAL_LLM_API = "http://localhost:8000/debug/";
+
 export function activate(context: vscode.ExtensionContext) {
+    // Register command for AI-powered debugging
+    let disposable = vscode.commands.registerCommand('extension.debugCode', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage("No active editor found.");
+            return;
+        }
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "ai-powered" is now active!');
+        const selectedCode = editor.document.getText(editor.selection);
+        if (!selectedCode) {
+            vscode.window.showErrorMessage("No code selected.");
+            return;
+        }
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('ai-powered.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from AI-Powered !');
-	});
+        vscode.window.showInformationMessage("AI Debugging in progress...");
 
-	context.subscriptions.push(disposable);
+        try {
+            const response = await axios.post(LOCAL_LLM_API, { code: selectedCode });
+            const fixedCode = response.data.fixed_code;
+
+            // Show AI suggestion instead of replacing directly
+            const edit = new vscode.WorkspaceEdit();
+            const range = editor.selection;
+            edit.replace(editor.document.uri, range, fixedCode);
+            vscode.workspace.applyEdit(edit);
+            vscode.window.showInformationMessage("AI Debug: Suggestion applied!");
+        } catch (error) {
+            vscode.window.showErrorMessage("Error communicating with AI Debugger.");
+        }
+    });
+
+    // Register code diagnostic provider for real-time error detection
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('aiDebugger');
+    context.subscriptions.push(diagnosticCollection);
+
+    vscode.workspace.onDidChangeTextDocument(async (event) => {
+        if (!event.document) return;
+
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document !== event.document) return;
+
+        const code = event.document.getText();
+        try {
+            const response = await axios.post(LOCAL_LLM_API, { code });
+            const fixedCode = response.data.fixed_code;
+
+            // Clear previous diagnostics
+            diagnosticCollection.clear();
+
+            // Generate diagnostics based on AI response (simple logic for now)
+            const diagnostics: vscode.Diagnostic[] = [];
+            const lines = code.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes('error') || lines[i].includes('undefined')) {
+                    const range = new vscode.Range(i, 0, i, lines[i].length);
+                    const diagnostic = new vscode.Diagnostic(
+                        range,
+                        "Possible error detected: AI suggests a fix.",
+                        vscode.DiagnosticSeverity.Warning
+                    );
+                    diagnostics.push(diagnostic);
+                }
+            }
+
+            // Apply diagnostics
+            diagnosticCollection.set(event.document.uri, diagnostics);
+        } catch (error) {
+            console.error("AI Debugger Error:", error);
+        }
+    });
+
+    // Register command for custom debugging prompts
+    let customPromptDisposable = vscode.commands.registerCommand('extension.customDebugPrompt', async () => {
+        const input = await vscode.window.showInputBox({
+            prompt: "Enter your custom AI debugging prompt",
+            placeHolder: "Example: Optimize this code for performance"
+        });
+
+        if (!input) return;
+
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage("No active editor found.");
+            return;
+        }
+
+        const selectedCode = editor.document.getText(editor.selection);
+        if (!selectedCode) {
+            vscode.window.showErrorMessage("No code selected.");
+            return;
+        }
+
+        vscode.window.showInformationMessage("AI Debugging in progress...");
+
+        try {
+            const response = await axios.post(LOCAL_LLM_API, { code: selectedCode, prompt: input });
+            const fixedCode = response.data.fixed_code;
+
+            // Show AI suggestion instead of replacing directly
+            const edit = new vscode.WorkspaceEdit();
+            const range = editor.selection;
+            edit.replace(editor.document.uri, range, fixedCode);
+            vscode.workspace.applyEdit(edit);
+            vscode.window.showInformationMessage("AI Debug: Custom Suggestion applied!");
+        } catch (error) {
+            vscode.window.showErrorMessage("Error communicating with AI Debugger.");
+        }
+    });
+
+    context.subscriptions.push(disposable, customPromptDisposable);
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}
+
